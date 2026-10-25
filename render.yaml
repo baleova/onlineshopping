@@ -1,0 +1,31 @@
+# Render Blueprint - free web service. See README "Free hosting".
+services:
+  - type: web
+    name: baleova
+    runtime: node
+    plan: free
+    buildCommand: echo "no build needed"
+    startCommand: node server.js
+    healthCheckPath: /healthz
+    autoDeployTrigger: commit
+    envVars:
+      - key: NODE_VERSION
+        value: "22"
+      - key: COOKIE_SECURE
+        value: "1"
+      - key: TRUST_PROXY
+        value: "1"
+      - key: KEEP_AWAKE
+        value: "1"
+      - key: TZ_OFFSET_HOURS
+        value: "3"
+      - key: WEBAPP_URL          # set to your https://<name>.onrender.com address after the first deploy
+        sync: false
+      - key: BOT_TOKEN
+        sync: false
+      - key: ADMIN_CHAT_ID
+        sync: false
+      - key: ADMIN_USERNAME
+        value: owner
+      - key: ADMIN_PASSWORD
+        sync: false

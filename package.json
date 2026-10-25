@@ -1,0 +1,12 @@
+{
+  "name": "baleova",
+  "version": "1.0.0",
+  "description": "BALEOVA - fashion showcase, inventory and Telegram Mini App",
+  "private": true,
+  "engines": { "node": ">=22.13" },
+  "scripts": {
+    "start": "node server.js",
+    "test": "node scripts/test.js && node scripts/test-backup.js"
+  },
+  "dependencies": {}
+}
