@@ -6,7 +6,7 @@
   "engines": { "node": ">=22.13" },
   "scripts": {
     "start": "node server.js",
-    "test": "node scripts/test.js && node scripts/test-backup.js"
+    "test": "node scripts/test.js && node scripts/test-backup.js && node scripts/test-channels.js"
   },
   "dependencies": {}
 }

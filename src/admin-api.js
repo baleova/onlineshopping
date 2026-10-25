@@ -2,6 +2,7 @@ const { Router, raw } = require('./mini');
 const { db, tx, getSettings, SETTING_DEFAULTS } = require('./db');
 const S = require('./services');
 const A = require('./auth');
+const C = require('./channels');
 const { bad, HttpError, str, reqStr, int, flag, oneOf, normPhone, wrap, saveImage, limiter } = require('./util');
 
 const r = new Router();
@@ -39,7 +40,8 @@ r.get('/products', staff, wrap((req, res) => {
   if (req.query.status) { where.push('p.status = ?'); args.push(req.query.status); }
   if (req.query.q) { where.push("(p.name LIKE ? OR p.code LIKE ?)"); const l = `%${String(req.query.q).slice(0, 60)}%`; args.push(l, l); }
   const rows = db.prepare(`${S.PRODUCT_SELECT} ${where.length ? 'WHERE ' + where.join(' AND ') : ''} ORDER BY p.id DESC LIMIT 500`).all(...args);
-  res.json(rows.map(p => S.decorate(p, true)));
+  const posted = C.postedCounts();
+  res.json(rows.map(p => ({ ...S.decorate(p, true), posted: posted[p.id] || 0 })));
 }));
 r.get('/products/:id', staff, wrap((req, res) => {
   const p = S.getProduct(id(req), { admin: true });
@@ -96,7 +98,19 @@ function saveProduct(pid, b, userId) {
     return pid;
   });
 }
-r.post('/products', manager, wrap((req, res) => res.status(201).json(S.getProduct(saveProduct(null, req.body || {}, req.user.id), { admin: true }))));
+// A new product is posted to the Telegram channels automatically (Settings > Telegram channels), unless the box is unticked for it.
+r.post('/products', manager, wrap(async (req, res) => {
+  const b = req.body || {}, pid = saveProduct(null, b, req.user.id);
+  const want = b.post_to_channels === undefined ? getSettings().tg_autopost === '1' : !!flag(b.post_to_channels);
+  let posted = [];
+  if (want) { try { posted = await C.postProduct(pid); } catch (e) { posted = [{ ok: false, channel: '', error: e.message }]; } }   // posting must never lose a saved product
+  res.status(201).json({ ...S.getProduct(pid, { admin: true }), posted });
+}));
+// "Post" / "Post again" from the Products list: all active channels, or only the ticked ones.
+r.post('/products/:id/post', manager, wrap(async (req, res) => {
+  const b = req.body || {};
+  res.json({ posted: await C.postProduct(id(req), { channelIds: Array.isArray(b.channel_ids) ? b.channel_ids : undefined, kind: b.kind === 'new' ? 'new' : 'again', explicit: true }) });
+}));
 r.put('/products/:id', manager, wrap((req, res) => res.json(S.getProduct(saveProduct(id(req), req.body || {}, req.user.id), { admin: true }))));
 r.patch('/products/:id/status', manager, wrap((req, res) => {
   const st = oneOf(req.body?.status, ['active', 'archived'], 'Status');
@@ -249,6 +263,7 @@ r.put('/settings', owner, wrap((req, res) => {
     whatsapp: v => normPhone(v), telegram: v => str(v, 80).replace(/^(https?:\/\/)?t\.me\//i, '').replace(/^@/, ''),
     bot_username: v => str(v, 80).replace(/^(https?:\/\/)?t\.me\//i, '').replace(/^@/, ''),
     low_stock_threshold: v => String(int(v, 'Low-stock level', { min: 0, max: 1000 })),
+    tg_autopost: v => flag(v) ? '1' : '0', tg_miniapp: v => str(v, 64).replace(/[^\w]/g, ''),
   };
   const url = k => v => { const s = str(v, 300); if (s && !/^https?:\/\//i.test(s)) throw bad(`${k} must start with http:// or https://`); return s; };
   clean.map_url = url('Map link'); clean.instagram = url('Instagram'); clean.facebook = url('Facebook'); clean.tiktok = url('TikTok');
@@ -257,6 +272,25 @@ r.put('/settings', owner, wrap((req, res) => {
   });
   res.json(getSettings());
 }));
+
+// ---- Telegram channels (where new products are posted) ----
+r.get('/channels', manager, wrap((req, res) => res.json({
+  bot_on: C.botOn(),
+  channels: db.prepare(`SELECT c.*, (SELECT COUNT(*) FROM channel_posts x WHERE x.channel_id = c.id AND x.ok = 1) AS posts,
+    (SELECT error FROM channel_posts x WHERE x.channel_id = c.id ORDER BY x.id DESC LIMIT 1) AS last_error FROM channels c ORDER BY c.id`).all(),
+})));
+function channelVals(b) {
+  return [reqStr(b.name, 'Name', 60), C.normChat(b.chat), oneOf(b.lang || 'en', ['en', 'om', 'am'], 'Language'), oneOf(b.audience || 'all', ['all', 'men', 'women'], 'Audience'), flag(b.active ?? 1)];
+}
+const dupChannel = e => { if (/UNIQUE/.test(e.message)) throw bad('That channel is already in the list'); throw e; };
+r.post('/channels', owner, wrap((req, res) => {
+  try { res.status(201).json({ id: db.prepare('INSERT INTO channels(name,chat,lang,audience,active) VALUES(?,?,?,?,?)').run(...channelVals(req.body || {})).lastInsertRowid }); } catch (e) { dupChannel(e); }
+}));
+r.put('/channels/:id', owner, wrap((req, res) => {
+  try { db.prepare('UPDATE channels SET name=?,chat=?,lang=?,audience=?,active=? WHERE id=?').run(...channelVals(req.body || {}), id(req)); res.json({ ok: true }); } catch (e) { dupChannel(e); }
+}));
+r.delete('/channels/:id', owner, wrap((req, res) => { db.prepare('DELETE FROM channels WHERE id = ?').run(id(req)); res.json({ ok: true }); }));
+r.post('/channels/:id/test', owner, wrap(async (req, res) => res.json(await C.sendTest(id(req)))));
 
 // ---- team ----
 r.get('/users', owner, wrap((req, res) => res.json(db.prepare('SELECT id, username, display_name, role, active, created_at FROM users ORDER BY id').all())));

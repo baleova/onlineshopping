@@ -364,6 +364,8 @@ if (inTG) { try { TG.BackButton.onClick(() => history.back()); } catch {} }
   document.documentElement.lang = LANG; $('.skip').textContent = t('skip');
   try { STORE = await api('/api/store'); }
   catch { $('#main').replaceChildren(h('div', { class: 'wrap empty' }, h('h2', null, t('be_right_back')), h('p', null, t('store_not_loaded')))); return; }
+  // A channel post's "Open in store" button opens the Mini App with ?startapp=p_<id>: go straight to that product.
+  try { const m = inTG && /^p_(\d{1,9})$/.exec((TG.initDataUnsafe && TG.initDataUnsafe.start_param) || ''); if (m && !location.hash.slice(1)) location.hash = `#/p/${m[1]}`; } catch {}
   renderTop(); renderFooter(); route();
 })();
 })();

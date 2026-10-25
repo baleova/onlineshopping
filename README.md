@@ -67,6 +67,21 @@ Separate page on the site, kept apart from in-stock products. Customers see refe
 4. Message your bot. `/start` shows the welcome and the **Open BALEOVA Store** button. The bot also has `/stock <name or code>` (availability), `/contact` and `/help`, and a **Store** menu button.
 The bot token stays on the server. When a customer submits a review from inside Telegram, their identity is checked on the server using Telegram's signed login data.
 
+## Posting new products to Telegram channels
+The same bot posts to **any number of channels or groups**. You do not need a second bot (make a new one only if you want a different name or picture for a channel).
+1. In Telegram create a channel (for example one for Men, one for Women, one per language).
+2. Open it > Administrators > **Add your bot** and allow **Post messages**.
+3. Admin > Settings > **Telegram posting** > **+ Add channel**. Enter `@channelname` (or the `-100...` number for a private channel or group), choose the **language** (English, Afaan Oromoo or Amharic) and which products it receives (everything, Men or Women; unisex items go to both). Press **Save, then send test post** to confirm.
+4. **Every new product is then posted automatically** with its first photo, name, code, price (and discount), the sizes and colours that are in stock, condition and gender, your phone and address, and buttons: **Order on WhatsApp** (opens a ready message with the product code), **Message on Telegram**, and **Open in store**.
+- When adding a product there is a tick box "Post to Telegram when saved". Untick it to keep a product quiet. Turn automatic posting off completely in Settings > Telegram posting.
+- Products list > **Post / Post again** sends it (again) to the channels you tick, for example after a restock. Each channel is posted in its own language, using your Afaan Oromoo / Amharic names and descriptions when you filled them in.
+- If Telegram refuses a post (for example the bot is not an admin) the admin shows a plain message, the product is still saved, and the last error is shown next to the channel.
+- Posts never include stock counts, ratings or sales numbers. Out-of-stock and archived products are not posted.
+- Telegram does not allow "call" buttons, so the phone number is written in the post (tap to call). Captions are limited to 1,024 characters, so long descriptions are shortened. Posts are sent one by one with a short pause to stay inside Telegram's limits.
+- **Open in store opens the product inside Telegram:** in @BotFather create a Mini App with `/newapp` (URL = your site), put its short name in Settings > Telegram posting > *Mini App short name*, and fill *Telegram bot username* in the contact details. Without this, the button opens the website address instead.
+- Posting needs the server to be awake. On a free host adding a product in Admin wakes it, so automatic posting works; scheduled posts at a set time are not included.
+- Please have a native speaker check the Afaan Oromoo and Amharic post wording (`POST` in `src/i18n.js`).
+
 ## Free hosting (no credit card)
 
 **Recommended: Render free web service** + a free GitHub account.
@@ -106,6 +121,7 @@ src/public-api.js    site API (products, reviews, SHEIN)
 src/admin-api.js     admin API (role-protected)
 src/auth.js          login, sessions, roles
 src/telegram.js      bot + Mini App signature check
+src/channels.js      posts products to Telegram channels (design, languages, buttons, queue)
 src/i18n.js          category names, default shop texts and bot messages in 3 languages
 public/js/i18n.js    storefront text in 3 languages
 src/mini.js          tiny built-in web framework (no dependencies)

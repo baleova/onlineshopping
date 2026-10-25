@@ -9,7 +9,7 @@ const r = new Router();
 
 r.get('/store', wrap((req, res) => {
   const lang = pickLang(req.query.lang);
-  const s = getSettings(); delete s.low_stock_threshold;
+  const s = getSettings(); delete s.low_stock_threshold; delete s.tg_autopost; delete s.tg_miniapp;
   const cats = db.prepare(`SELECT c.slug, c.name, (SELECT COUNT(*) FROM products p WHERE p.category_id = c.id AND p.status = 'active') AS count,
       (SELECT url FROM product_images i JOIN products p ON p.id = i.product_id WHERE p.category_id = c.id AND p.status = 'active' ORDER BY p.id DESC, i.sort, i.id LIMIT 1) AS cover
     FROM categories c ORDER BY c.sort`).all().map(c => ({ ...c, name: catName(c.slug, c.name, lang) }));

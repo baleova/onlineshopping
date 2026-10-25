@@ -45,4 +45,17 @@ const BOT = {
     stockHint: 'ከ /stock በኋላ የምርት ስም ወይም ኮድ ይጻፉ፣ ለምሳሌ /stock hoodie', none: q => `"${q}" የሚል ምርት አልተገኘም። ሁሉንም ለማየት ሱቁን ይክፈቱ።`, inStock: 'ይገኛል', low: 'ጥቂት ቀርቷል', out: 'አልቋል', sizes: 'መጠኖች', colours: 'ቀለሞች',
     phone: 'ስልክ', wa: 'ዋትስአፕ', loc: 'አድራሻ', hours: 'የሥራ ሰዓት', pickLang: 'ቋንቋዎን ይምረጡ:', langSet: 'ቋንቋ ወደ አማርኛ ተቀይሯል።' },
 };
-module.exports = { LANGS, pickLang, catName, CATEGORY_NAMES, SETTING_TRANSLATIONS, localizeSettings, BOT };
+
+// Wording for posts the shop publishes to its Telegram channels.
+const POST = {
+  en: { fresh: 'NEW ARRIVAL', offer: 'SPECIAL OFFER', again: 'BACK IN STOCK', code: 'Code', category: 'Category', sizes: 'Sizes', colours: 'Colours', men: 'For men', women: 'For women', unisex: 'For men and women', brandNew: 'Brand new', bonda: 'Bonda (second-hand)',
+    delivery: 'Delivery across Ethiopia', order: 'Order on WhatsApp', telegram: 'Message on Telegram', store: 'Open in store', call: 'Call', contactHint: 'Tap a button below to order. We confirm price and delivery with you.',
+    waHello: s => `Hello ${s}, I'd like to order:`, waPrice: 'Price', waAvail: 'Is it available?', testOk: n => `${n} is connected to this channel. New products will be posted here.` },
+  om: { fresh: 'MEESHAA HARAA', offer: 'KENNAA SPEESHAALAA', again: 'DEEBI’EE ARGAMEERA', code: 'Koodii', category: 'Gosa', sizes: 'Hammoota', colours: 'Halluuwwan', men: 'Dhiirotaaf', women: 'Dubartootaaf', unisex: 'Dhiiraa fi dubartootaaf', brandNew: 'Haaraa', bonda: 'Bonda (kan fayyadamame)',
+    delivery: 'Itiyoophiyaa guutuu keessatti geessina', order: 'WhatsApp irratti ajajaa', telegram: 'Telegram irratti barreessaa', store: 'Suuqa keessatti banaa', call: 'Bilbilaa', contactHint: 'Ajajuuf button armaan gadii tuqaa. Gatii fi geessisa isin waliin mirkaneessina.',
+    waHello: s => `Akkam ${s}, kana ajajuu barbaada:`, waPrice: 'Gatii', waAvail: 'Argamaa?', testOk: n => `${n} kanaan wal qabateera. Meeshaaleen haaraan as irratti ni maxxansamu.` },
+  am: { fresh: 'አዲስ ዕቃ', offer: 'ልዩ ቅናሽ', again: 'እንደገና ተመልሷል', code: 'ኮድ', category: 'ዓይነት', sizes: 'መጠኖች', colours: 'ቀለሞች', men: 'ለወንዶች', women: 'ለሴቶች', unisex: 'ለወንዶችና ለሴቶች', brandNew: 'አዲስ', bonda: 'ቦንዳ (ያገለገለ)',
+    delivery: 'በመላው ኢትዮጵያ እናደርሳለን', order: 'በዋትስአፕ ያዝዙ', telegram: 'በቴሌግራም ይጻፉልን', store: 'በሱቁ ውስጥ ክፈት', call: 'ደውል', contactHint: 'ለማዘዝ ከታች ያለውን ቁልፍ ይጫኑ። ዋጋውንና ማድረሱን አረጋግጠን እንስማማለን።',
+    waHello: s => `ሰላም ${s}፣ ይህን ማዘዝ እፈልጋለሁ፦`, waPrice: 'ዋጋ', waAvail: 'ይገኛል?', testOk: n => `${n} ከዚህ ቻናል ጋር ተገናኝቷል። አዳዲስ ምርቶች እዚህ ይለጠፋሉ።` },
+};
+module.exports = { LANGS, pickLang, catName, CATEGORY_NAMES, SETTING_TRANSLATIONS, localizeSettings, BOT, POST };

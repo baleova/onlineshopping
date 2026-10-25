@@ -100,6 +100,8 @@ const SETTING_DEFAULTS = {
   policies: 'Prices are in Ethiopian birr (ETB). Availability is confirmed when you contact us. Payment and delivery are arranged directly with BALEOVA. Please check size and colour with us before buying.',
   shein_notice: 'SHEIN prices, shipping cost, availability and delivery time must be confirmed with us before we accept your order. The price shown is only an estimate.',
   instagram: '', facebook: '', tiktok: '', low_stock_threshold: '3',
+  tg_autopost: '1',   // 1 = every new product is posted to the active Telegram channels (can be switched off per product)
+  tg_miniapp: '',     // optional: short name of the Mini App from BotFather, so channel posts open the product inside Telegram
 };
 Object.assign(SETTING_DEFAULTS, SETTING_TRANSLATIONS);
 for (const [k, v] of Object.entries(SETTING_DEFAULTS)) db.prepare('INSERT OR IGNORE INTO settings(key,value) VALUES(?,?)').run(k, v);
@@ -115,5 +117,18 @@ for (const [t, c, d] of [['products','name_om'],['products','name_am'],['product
   try { db.exec(`ALTER TABLE ${t} ADD COLUMN ${c} TEXT NOT NULL DEFAULT ${d || "''"}`); } catch { /* already there */ }
 }
 db.exec('CREATE TABLE IF NOT EXISTS bot_users(chat_id TEXT PRIMARY KEY, lang TEXT NOT NULL DEFAULT \'en\')');
+// Telegram channels / groups the shop posts new products to. One bot can post to many of them.
+db.exec(`
+CREATE TABLE IF NOT EXISTS channels(
+  id INTEGER PRIMARY KEY, name TEXT NOT NULL, chat TEXT NOT NULL UNIQUE,
+  lang TEXT NOT NULL DEFAULT 'en' CHECK(lang IN ('en','om','am')),
+  audience TEXT NOT NULL DEFAULT 'all' CHECK(audience IN ('all','men','women')),
+  active INTEGER NOT NULL DEFAULT 1, created_at TEXT NOT NULL DEFAULT (datetime('now')));
+CREATE TABLE IF NOT EXISTS channel_posts(
+  id INTEGER PRIMARY KEY, channel_id INTEGER NOT NULL REFERENCES channels(id) ON DELETE CASCADE,
+  product_id INTEGER NOT NULL REFERENCES products(id) ON DELETE CASCADE,
+  message_id INTEGER, ok INTEGER NOT NULL DEFAULT 1, error TEXT DEFAULT '', created_at TEXT NOT NULL DEFAULT (datetime('now')));
+CREATE INDEX IF NOT EXISTS idx_posts_product ON channel_posts(product_id);
+`);
 
 module.exports = { db, tx, DATA_DIR, getSettings, SETTING_DEFAULTS };

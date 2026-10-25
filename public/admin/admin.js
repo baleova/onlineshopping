@@ -144,6 +144,17 @@ async function sales(v) {
   drawLines(); await loadList();
 }
 
+/* ---------- Telegram posting results ---------- */
+const LANG_NAME = { en: 'English', om: 'Afaan Oromoo', am: 'Amharic' }, AUD_NAME = { all: 'Everything', men: 'Men (and unisex)', women: 'Women (and unisex)' };
+function reportPosts(posted) {
+  if (!posted || !posted.length) return;
+  const ok = posted.filter(x => x.ok), problems = posted.filter(x => !x.ok);
+  if (!problems.length) return toast(`Posted to ${ok.length} Telegram channel${ok.length === 1 ? '' : 's'}.`);
+  modal('Telegram posting', [ok.length > 0 && h('p', null, `Posted to: ${ok.map(x => x.channel).join(', ')}.`),
+    h('p', { class: 'err' }, 'Not posted:'), h('ul', null, problems.map(x => h('li', null, x.channel ? h('b', null, x.channel + ': ') : '', x.error))),
+    h('p', { class: 'muted' }, 'The product itself is saved. Fix the problem, then use the Post button in the Products list.')]);
+}
+
 /* ---------- products ---------- */
 const searchBox = inp => { inp.addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); inp.dispatchEvent(new Event('input')); } });
   return h('div', { class: 'sbox' }, inp, h('button', { class: 'btn gold sm', type: 'button', onclick: () => inp.dispatchEvent(new Event('input')) }, 'Search')); };
@@ -157,15 +168,34 @@ async function products(v) {
       h('td', null, p.cover && h('img', { class: 'thumb', src: p.cover, alt: '', loading: 'lazy' })), h('td', null, h('b', null, p.name), h('div', { class: 'muted' }, p.code)), h('td', null, p.category_name),
       h('td', { class: 'num' }, etb(p.final_price), p.sale_price != null && h('div', { class: 'muted' }, h('s', null, etb(p.price)))),
       h('td', { class: 'num' }, h('span', { class: 'tag ' + (p.stock_status === 'out' ? 'bad' : p.stock_status === 'low' ? 'warn' : 'ok') }, p.total_stock)), h('td', { class: 'num' }, p.units_sold),
-      h('td', null, p.status === 'archived' && h('span', { class: 'tag bad' }, 'Archived'), p.condition === 'bonda' && h('span', { class: 'tag warn' }, 'Bonda'), p.gender !== 'unisex' && h('span', { class: 'tag' }, p.gender === 'men' ? 'Men' : 'Women'), p.is_featured && h('span', { class: 'tag gold' }, 'Featured'), p.is_new && h('span', { class: 'tag' }, 'New'), p.is_best && h('span', { class: 'tag' }, 'Best seller'), p.is_offer && h('span', { class: 'tag' }, 'Offer'), p.out_of_stock && h('span', { class: 'tag bad' }, 'Marked out')),
+      h('td', null, p.status === 'archived' && h('span', { class: 'tag bad' }, 'Archived'), p.condition === 'bonda' && h('span', { class: 'tag warn' }, 'Bonda'), p.gender !== 'unisex' && h('span', { class: 'tag' }, p.gender === 'men' ? 'Men' : 'Women'), p.is_featured && h('span', { class: 'tag gold' }, 'Featured'), p.is_new && h('span', { class: 'tag' }, 'New'), p.is_best && h('span', { class: 'tag' }, 'Best seller'), p.is_offer && h('span', { class: 'tag' }, 'Offer'), p.out_of_stock && h('span', { class: 'tag bad' }, 'Marked out'), p.posted > 0 && h('span', { class: 'tag ok', title: 'Number of Telegram channels it was posted to' }, `Posted ×${p.posted}`)),
       h('td', { style: 'white-space:nowrap' }, can('manager') && [h('button', { class: 'btn sm', onclick: () => editor(p.id) }, 'Edit'), ' ',
+        p.status === 'active' && [h('button', { class: 'btn sm', onclick: () => postDialog(p) }, p.posted > 0 ? 'Post again' : 'Post'), ' '],
         h('button', { class: 'btn sm', onclick: async () => { if (await act(() => api('PATCH', `/products/${p.id}/status`, { status: p.status === 'active' ? 'archived' : 'active' }), p.status === 'active' ? 'Archived' : 'Restored')) load(); } }, p.status === 'active' ? 'Archive' : 'Restore'), ' ',
         h('button', { class: 'btn sm danger', onclick: async () => { if (confirm(`Delete "${p.name}" permanently? This cannot be undone.`) && await act(() => api('DELETE', `/products/${p.id}`), 'Deleted')) load(); } }, 'Delete')]))), 'No products found.'));
   }
   q.addEventListener('input', () => { clearTimeout(q._t); q._t = setTimeout(load, 250); }); status.addEventListener('change', load);
 
+  // Post (or repost, e.g. after a restock or price change) to the Telegram channels.
+  async function postDialog(p) {
+    const { channels } = await api('GET', '/channels'), on = channels.filter(c => c.active);
+    if (!on.length) return toast('No Telegram channel yet. Add one in Settings > Telegram channels.', true);
+    const boxes = on.map(c => ({ c, el: h('input', { type: 'checkbox', checked: true, style: 'width:auto' }) }));
+    await modal(`${p.posted > 0 ? 'Post again' : 'Post'}: ${p.name}`, [h('p', { class: 'muted', style: 'margin:0' }, 'The post uses the first photo, the price, sizes and colours that are in stock, and your contact buttons. Each channel gets its own language.'),
+      ...boxes.map(b => h('label', { class: 'row' }, b.el, h('span', null, h('b', null, b.c.name), h('span', { class: 'muted' }, ` ${LANG_NAME[b.c.lang]} · ${AUD_NAME[b.c.audience]}`))))],
+      [{ label: 'Post now', cls: 'pri', run: async () => {
+        const ids = boxes.filter(b => b.el.checked).map(b => b.c.id);
+        if (!ids.length) { toast('Tick at least one channel.', true); return false; }
+        const r = await act(() => api('POST', `/products/${p.id}/post`, { channel_ids: ids })); if (!r) return false;
+        reportPosts(r.posted); load(); return true;
+      } }]);
+  }
+
   async function editor(id) {
     const P = id ? await api('GET', `/products/${id}`) : { code: '', name: '', category_id: cats[0].id, price: '', sale_price: null, description: '', material: '', fit: '', specs: [], images: [], variants: [], gender: 'unisex', condition: 'new', is_featured: false, is_new: true, is_best: false, is_offer: false, out_of_stock: false };
+    let tgInfo = null;   // only for new products: are there Telegram channels, and is automatic posting on?
+    if (!id) { try { const [c, s] = await Promise.all([api('GET', '/channels'), api('GET', '/settings')]); const n = c.channels.filter(x => x.active).length; if (n) tgInfo = { n, auto: s.tg_autopost === '1' }; } catch {} }
+    const postBox = h('input', { type: 'checkbox', checked: !!(tgInfo && tgInfo.auto), style: 'width:auto' });
     const F = {}, mk = (k, a = {}) => (F[k] = h('input', { value: P[k] ?? '', ...a }));
     const cat = h('select', null, cats.map(c => h('option', { value: c.id, selected: c.id === P.category_id }, c.name)));
     const gender = h('select', null, [['unisex', 'Unisex (men and women)'], ['men', 'Men'], ['women', 'Women']].map(([k, l]) => h('option', { value: k, selected: k === (P.gender || 'unisex') }, l)));
@@ -195,11 +225,13 @@ async function products(v) {
       field('Description', desc), h('div', { class: 'card', style: 'display:grid;gap:10px' }, h('b', null, 'Translations (optional)'), h('p', { class: 'muted', style: 'margin:0' }, 'Shown when a customer picks Afaan Oromoo or Amharic. Leave blank to show the English text.'), h('div', { class: 'grid2' }, field('Name in Afaan Oromoo', mk('name_om', { maxlength: '120' })), field('Name in Amharic', mk('name_am', { maxlength: '120' }))), field('Description in Afaan Oromoo', descOm), field('Description in Amharic', descAm)), h('div', { class: 'grid2' }, field('Material', mk('material', { maxlength: '300' })), field('Fit', mk('fit', { maxlength: '200' }))), field('Specifications', specs),
       h('div', null, h('b', null, 'Photos'), h('p', { class: 'muted', style: 'margin:2px 0 8px' }, 'First photo is the cover. Up to 10. Large photos are shrunk automatically.'), imgEl, fileIn),
       h('div', null, h('b', null, 'Sizes, colours and stock'), varEl, h('div', { class: 'row', style: 'margin-top:8px' }, gs, gc, h('label', { class: 'row' }, 'Stock each', gq), h('button', { class: 'btn sm', onclick: gen }, 'Add combinations'))),
-      h('div', { class: 'row' }, chk('is_featured', 'Featured'), chk('is_new', 'New arrival'), chk('is_best', 'Best seller'), chk('is_offer', 'Special offer'), chk('out_of_stock', 'Mark as out of stock'))];
+      h('div', { class: 'row' }, chk('is_featured', 'Featured'), chk('is_new', 'New arrival'), chk('is_best', 'Best seller'), chk('is_offer', 'Special offer'), chk('out_of_stock', 'Mark as out of stock')),
+      tgInfo && h('label', { class: 'card row', style: 'gap:10px' }, postBox, h('span', null, h('b', null, `Post to Telegram when saved (${tgInfo.n} channel${tgInfo.n === 1 ? '' : 's'})`), h('div', { class: 'muted' }, 'Untick if you do not want this product announced yet. You can post it later with the Post button.')))];
     await modal(id ? `Edit ${P.name}` : 'Add product', body, [{ label: 'Save product', cls: 'pri', run: async () => {
       const payload = { code: F.code.value, name: F.name.value, category_id: +cat.value, gender: gender.value, condition: cond.value, price: F.price.value, sale_price: F.sale_price.value, description: desc.value, name_om: F.name_om.value, name_am: F.name_am.value, description_om: descOm.value, description_am: descAm.value, material: F.material.value, fit: F.fit.value, specs: specs.value, images,
         variants: vars.map(x => ({ id: x.id, size: x.size, color: x.color, stock: x.stock })), ...Object.fromEntries(['is_featured', 'is_new', 'is_best', 'is_offer', 'out_of_stock'].map(k => [k, F[k].checked])) };
-      const ok = await act(() => id ? api('PUT', `/products/${id}`, payload) : api('POST', '/products', payload), 'Product saved'); if (ok) load(); return !!ok;
+      if (!id && tgInfo) payload.post_to_channels = postBox.checked;
+      const ok = await act(() => id ? api('PUT', `/products/${id}`, payload) : api('POST', '/products', payload), 'Product saved'); if (ok) { load(); if (ok.posted) reportPosts(ok.posted); } return !!ok;
     } }]);
   }
   v.replaceChildren(header('Products', 'Manage what customers see in the store.', can('manager') && h('button', { class: 'btn gold', onclick: () => editor() }, '+ Add product')), h('div', { class: 'bar' }, searchBox(q), status), list);
@@ -323,10 +355,38 @@ async function settings(v) {
     };
     team.replaceChildren(h('h2', null, 'Team'), h('div', { class: 'bar' }, h('button', { class: 'btn gold', onclick: () => edit() }, '+ Add team member')), table(['Username', 'Name', 'Role', 'Active', ''], rows.map(u => h('tr', null, h('td', null, u.username), h('td', null, u.display_name), h('td', null, u.role), h('td', null, u.active ? 'Yes' : 'No'), h('td', null, h('button', { class: 'btn sm', onclick: () => edit(u) }, 'Edit'))))));
   }
+  /* Telegram channels: where new products are posted. One bot can post to many channels. */
+  const tgBox = h('div', { class: 'card', style: 'display:grid;gap:12px' });
+  async function loadChannels() {
+    const { bot_on, channels } = await api('GET', '/channels'), owner = can('owner');
+    const auto = h('input', { type: 'checkbox', checked: S.tg_autopost === '1', style: 'width:auto' }), app = h('input', { value: S.tg_miniapp || '', placeholder: 'optional, e.g. store', maxlength: '64' });
+    const edit = async c => {
+      const F4 = { name: h('input', { value: c?.name || '', maxlength: '60', placeholder: 'e.g. BALEOVA Women' }), chat: h('input', { value: c?.chat || '', maxlength: '80', placeholder: '@yourchannel  or  -1001234567890' }),
+        lang: h('select', null, Object.entries(LANG_NAME).map(([k, l]) => h('option', { value: k, selected: (c?.lang || 'en') === k }, l))),
+        audience: h('select', null, Object.entries(AUD_NAME).map(([k, l]) => h('option', { value: k, selected: (c?.audience || 'all') === k }, l))),
+        active: h('input', { type: 'checkbox', checked: c ? !!c.active : true, style: 'width:auto' }) };
+      const vals = () => ({ name: F4.name.value, chat: F4.chat.value, lang: F4.lang.value, audience: F4.audience.value, active: F4.active.checked });
+      await modal(c ? `Edit ${c.name}` : 'Add Telegram channel', [h('div', { class: 'grid2' }, field('Name (only you see this)', F4.name), field('Channel or group', F4.chat, 'Public channel: @name. Private channel or group: its number (starts with -100).'),
+          field('Post language', F4.lang, 'Product names and descriptions use your translations when you filled them in.'), field('Post these products', F4.audience, 'Unisex items go to both Men and Women channels.')), h('label', { class: 'row' }, F4.active, 'Active (untick to pause posting here)')],
+        [...(c ? [{ label: 'Delete', cls: 'danger', run: async () => { if (!confirm(`Remove "${c.name}" from the list? Posts already in Telegram stay there.`)) return false; const ok = await act(() => api('DELETE', `/channels/${c.id}`), 'Removed'); if (ok) loadChannels(); return !!ok; } },
+            { label: 'Save, then send test post', run: async () => { if (!await act(() => api('PUT', `/channels/${c.id}`, vals()))) return false; const ok = await act(async () => { const r = await api('POST', `/channels/${c.id}/test`); if (!r.ok) throw new Error(r.error); }, 'Test message sent. Check your channel.'); loadChannels(); return !!ok; } }] : []),
+          { label: 'Save', cls: 'pri', run: async () => { const ok = await act(() => c ? api('PUT', `/channels/${c.id}`, vals()) : api('POST', '/channels', vals()), 'Saved'); if (ok) loadChannels(); return !!ok; } }]);
+    };
+    tgBox.replaceChildren(h('b', null, 'Telegram channels and groups'),
+      h('p', { class: 'muted', style: 'margin:0' }, 'Every new product is posted automatically with its photo, price, sizes, colours and Order buttons. Use the same bot for all channels; you do not need a new one.'),
+      h('ol', { class: 'muted', style: 'margin:0;padding-left:20px' }, h('li', null, 'In Telegram create a channel (or group) for each audience or language.'), h('li', null, 'Open it > Administrators > Add your bot, allow "Post messages".'), h('li', null, 'Add it here with @name (or the -100… number for a private channel), pick the language, then press "Save, then send test post".')),
+      !bot_on && h('p', { class: 'err' }, 'The Telegram bot is not switched on for this server yet (BOT_TOKEN is empty), so nothing can be posted.'),
+      owner && h('div', { class: 'bar' }, h('button', { class: 'btn gold', onclick: () => edit() }, '+ Add channel')),
+      table(['Name', 'Channel', 'Language', 'Posts', 'Status', ''], channels.map(c => h('tr', null, h('td', null, h('b', null, c.name), h('div', { class: 'muted' }, AUD_NAME[c.audience])), h('td', null, c.chat), h('td', null, LANG_NAME[c.lang]), h('td', { class: 'num' }, c.posts),
+        h('td', null, h('span', { class: 'tag ' + (c.active ? 'ok' : '') }, c.active ? 'Active' : 'Paused'), c.last_error && h('div', { class: 'err', style: 'font-size:.85em' }, c.last_error)), h('td', null, owner && h('button', { class: 'btn sm', onclick: () => edit(c) }, 'Edit')))), 'No channel yet. Add your first one above.'),
+      h('div', { class: 'grid2' }, h('label', { class: 'row', style: 'gap:10px' }, auto, h('span', null, h('b', null, 'Post every new product automatically'), h('div', { class: 'muted' }, 'You can still untick it for one product when adding it.'))),
+        field('Mini App short name', app, 'From BotFather (/newapp). Makes the "Open in store" button open the product inside Telegram. Needs the bot username above.')),
+      owner && h('div', null, h('button', { class: 'btn pri', onclick: async () => { await act(() => api('PUT', '/settings', { tg_autopost: auto.checked, tg_miniapp: app.value }), 'Saved'); } }, 'Save posting options')));
+  }
   const cur = h('input', { type: 'password', autocomplete: 'current-password' }), nxt = h('input', { type: 'password', autocomplete: 'new-password' });
-  v.replaceChildren(header('Settings'), contact, h('h2', null, 'Languages'), tr, h('h2', null, 'Homepage banners and offers'), bn, team,
+  v.replaceChildren(header('Settings'), contact, h('h2', null, 'Telegram posting'), tgBox, h('h2', null, 'Languages'), tr, h('h2', null, 'Homepage banners and offers'), bn, team,
     h('h2', null, 'My password'), h('div', { class: 'card grid2' }, field('Current password', cur), field('New password (8+ characters)', nxt), h('div', null, h('button', { class: 'btn', onclick: async () => { if (await act(() => api('POST', '/me/password', { current: cur.value, next: nxt.value }), 'Password changed')) cur.value = nxt.value = ''; } }, 'Change password'))));
-  await Promise.all([loadBanners(), loadTeam()]);
+  await Promise.all([loadBanners(), loadTeam(), loadChannels()]);
 }
 
 (async () => { try { const r = await api('GET', '/me'); ME = r.user; start(); } catch { renderLogin(); } })();
